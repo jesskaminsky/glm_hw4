@@ -1,91 +1,123 @@
 ---
 title: "hw4"
 author: "Jess Kaminsky"
-date: "March 26, 2018"
+date: "April 9, 2018"
 output: html_document
 ---
 
+## Question 1
+### Part A
+<!-- # Codebook for Risky Behaviors -->
+
+<!-- # sex: woman/man -->
+<!-- # couples: 1 if randomized to couples group; 0 if randomized to other groups -->
+<!-- # women_alone: 1 if randomized to women alone group; 0 if randomized to other groups -->
+<!-- # bs_hiv: baseline HIV status (negative/positive) -->
+<!-- # bupacts: Number of unprotected sex acts at baseline -->
+<!-- # fupacts: Number of unprotected sex acts at followup -->
+<!-- # Note that fupacts is the outcome and bupacts is a covariate -->
+
 ```{r setup, include=FALSE, warning=FALSE}
+#install the required pacakges for the analysis
+#library(knitr)
 library(AER)
+library(ggplot2)
 
 risky <- read.csv("risky_behaviors.csv")
 attach(risky)
 
+#remove first column of data that is an unnecessary indexing variable
 risky <- risky[-1]
+#round the outcome variable to be a discrete count variable so we can use poisson regression
 risky$fupacts <- round(risky$fupacts)
+#convert the treatment groups to factor/dummy type variables rather than numeric
 risky$couples <- factor(risky$couples)
 risky$women_alone <- factor(risky$women_alone)
 ```
 
-## Question 1
+In exploring the risky behavior dataset, we hope to find a model that best predicts the rates of unprotected sex acts among couples and the efficiacy of an intervention the provided counseling sessions regarding practices that could reduce their likelihood of contracting HIV. When initially exploring the variables of interest - number of unprotected sex acts - by treatment group, we see that there are some potential outliers in the women alone and control groups - especially for baseline sex acts; however if these larger data points were excluded, the distribution of sex acts at baseline seem approximately equal among treatment groups. We can see a decrease in mean of the outcome at follow up among all treatment groups, but most notably in the women alone and couples groups - even the potential outliers decreased markedly. From exploring the following boxplots, there is evidence that the intervention was succesful at reducing the rate of unprotected sex acts. We will further explore this relationship using poisson regression.
 
-1. Poisson regression: the folderrisky.behaviorcontains data from a random-ized trial targeting couples at high risk of HIV infection. The intervention pro-vided counseling sessions regarding practices that could reduce their likelihoodof contracting HIV. Couples were randomized either to a control group, a groupin which just the woman participated, or a group in which both members ofthe couple participated. One of the outcomes examined after three months was“number of unprotected sex acts.”
+```{r}
+#convert 2 treatment dummy vars to 1 treatment variable that also accounts for contol group - this variable is the number of partners that received counseling
+risky$treatment = couples*2+(women_alone)
 
-# Codebook for Risky Behaviors
+par(mfrow=(c(2,2)))
+boxplot(bupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Baseline Sex Actsby Treatment Group", ylab = "Number of Unprotected Sex Acts")
+boxplot(fupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Follow-Up Sex Acts by Treatment Group", ylab = "Number of Unprotected Sex Acts", ylim = c(0, 300))
+```
 
-# sex: woman/man
-# couples: 1 if randomized to couples group; 0 if randomized to other groups
-# women_alone: 1 if randomized to women alone group; 0 if randomized to other groups
-# bs_hiv: baseline HIV status (negative/positive)
-# bupacts: Number of unprotected sex acts at baseline
-# fupacts: Number of unprotected sex acts at followup
-# Note that fupacts is the outcome and bupacts is a covariate
-
-
-(a)  Model this outcome as a function of treatment assignment using a Poisson regression. Does the model fit well? Is there evidence of overdispersion?
-
-The following model summary shows the results of fitting a generalized linear model with poisson regression modeling the number of unprotected sex acts at followup as a function of treatment group. Here we are using women_alone and couples as indicator variables for two of the three treatment groups - if both indicator variables are equal to 0 the subject is in the control group where neither partner has received counseling.
-
-```{r, warning=FALSE}
+```{r, warning=FALSE, include = FALSE}
+#fit a glm with poisson regression prediciting fupacts from treatment group alone
 model_a <- glm(fupacts ~ couples + women_alone, family = poisson, data = risky)
+```
+
+The following model is the result of fitting a generalized linear model with poisson regression modeling the number of unprotected sex acts at followup as a function of treatment group. Here we are using women_alone and couples as indicator variables for two of the three treatment groups - if both indicator variables are equal to 0 the subject is in the control group where neither partner has received counseling.
+
+$log(Unprotected Sex Acts_{follow-up}) = 3.09 - 0.322(Couples = 1) - 0.572(Women Alone = 1)$
+$Unprotected Sex Acts_{follow-up} = e ^ {3.09 - 0.322(Couples = 1) - 0.572(Women Alone = 1)}$
+
+A summary of the model is presented below.
+```{r}
 summary(model_a)
 ```
-When performing a hypothesis test to test the following hypotheses, where k is the dispersion parameter:
+
+Based on this model, we can interpret that the estimated rate of unprotected sex acts per three months for those in the control group is 21.977. The expected rate of unprotected sex acts at follow-up for those in the couples treatment group is $e^{3.09-0.322(1)}= 15.927$ per 3 months and $e^{3.09-0.572(1)} = 12.404$ per 3 months for those in the the women alone treatment group. Subjects in the couples group will have unprotected sex at a rate that is ($e^{-0.322}=0.725$) = 72.5% less than those in the control group. Subjects in the women alone will have unprotected sex at a rate that is ($e^{-0.572}=0.564$) = 56.4% less than those in the control group.
+
+In order to assess the fit of this model, we will perform a chi-squared test, testing the null hypothesis test that the ratio betweel the model residual deviance and residual degrees of freedm is equal to 1, we obtain a p-value that is approximately 0. Therefore, we can conclude that the ratio is significantly different than 1 which provides us with evidence that the model does not fit well and there is evidence of dispersion.
+
+```{r}
+pchisq(model_a$deviance, df = model_a$df.residual, lower.tail = FALSE)
+```
+
+To further examine the dispersion of this model, we will conduct an overdispersion hypothesis test to test the following hypotheses, where k is the dispersion parameter:
 $H_0: k = 1 $
 $H_1: k > 1 $
-We obtain the following results. With a z-score of 4.7542 and p-value = 9.961e-07, there is strong evidence to conclude that the true dispersion parameter is not equal to 1 - it is significantly greater than 1. There is evidence of overdispersion in this model.
+
 ```{r}
 dispersiontest(model_a, alternative = "greater")
 ```
 
-```{r}
-## get interpretation for this - should provide evidence of model fitting or not
-pchisq(model_a$deviance, df = model_a$df.residual, lower.tail = FALSE)
-```
+With a p-value = 9.961e-07, there is strong evidence to conclude that the true dispersion parameter is significantly greater than 1 and there is overdispersion in this model.
 
-We have further evidence of the model not fitting well from looking at a plot of the residual values against treatment group. Where 0 represents the control group, 1 represents the women alone group, and 2 represents the couples group. These residuals are approximately evenly distributed around 0; however the residuals range from -6.6 to 27.15 indicating a large difference between observed and expected outcome values - including more predictors in the model may decrease this error.
-```{r}
-plot(couples*2+(women_alone), resid(model_a), xlab = "Treatment Group", ylab = "Residual", main = "Plot of Residuals by Treatment Group")
-abline(h=0)
-```
+### Part B
 
-(b)  Next extend the model to include pre-treatment measures of the outcome and the additional pre-treatment variables included in the dataset. Does the modelfit well? Is there evidence of overdispersion?
+We will now extend the above model and include the other predictors included in the dataset - sex, baseline HIV status, and baseline number of unprotected sex acts. Poisson regression generated the following model.
 
-We will now fit the same model as above, but include the other predictors included in the dataset - sex, baseline HIV status, and number of unprotected sex acts at baseline. The model generated is presented below.
+$log(Unprotected Sex Acts_{follow-up}) = 2.787 + 0.109(sex = woman) - 0.450(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts) $
+$Unprotected Sex Acts_{follow-up} = e ^ {2.787 + 0.109(sex = woman) - 0.450(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts)}$
+
+A summary of the model is presented below.
 ```{r}
-model_b <- glm(fupacts ~ ., family = poisson, data = risky)
+model_b <- glm(fupacts ~ ., family = poisson, data = risky[-7])
 summary(model_b)
 ```
- 
+
+From the model, we can interpret that the estimated rate of unprotected sex acts per three months for HIV negative males in the control group having 0 unprotected sex acts at baseline is 2.787. As another example, the estimated rate of the outcome per three months for a HIV negative female in the couples group with 10 unprotected sex acts would be calculated as follows:
+$e ^ {2.787 + 0.109(1) - 0.450(1) - 0.662(0) - 0.438(0) + 0.011(10)} = 12.88418$ unprotected sex acts at followup per three months
+
+We can interpret the coefficients of the model as follows:
+- The predicted rate of unprotected sex acts at follow-up per three months for women is ($e^{0.109}=1.115$) = 11.5% greater than the rate for men when holding all other predictors constant.
+- The predicted rate of unprotected sex acts at follow-up per three months for subjects who are HIV positive at baseline is ($e^{-0.438}=0.645$) = 64.5% less than the rate for thos who are HIV negative at baseline while holding all other predictors constant.
+- The predicted rate of unprotected sex acts at follow-up per three months increases by ($e^{0.011}=1.011$) = 1.1% for every 1 unit increase in number of unprotected sex acts at baseline.
+
+We will asses the fit of this model with a chi-squared test, testing the null hypothesis test that the ratio betweel the model residual deviance and residual degrees of freedm is equal to 1, we obtain a p-value that is approximately 0. We can conclude that the ratio is significantly different than 1 which provides us with evidence that the model does not fit well and there is evidence of dispersion. The residual deviance for this model is 10200 indicating a slightly better fit than the previous model where the residual deviance was 12925.
+
+```{r, include = FALSE}
+pchisq(model_b$deviance, df = model_a$df.residual, lower.tail = FALSE)
+```
+
 In order to test for overdispersion in this model, we will test the following hypotheses:
+
 $H_0: k = 1 $
 $H_1: k > 1 $
-We obtain the following results. With a z-score of 5.5689 and p-value = 1.282e-08, there is strong evidence to conclude that the true dispersion parameter is not equal to 1 - it is significantly greater than 1. There is evern stronger evidence of overdispersion in this model compared to the previous model with only treatment group being used to predict the outcome.
+
+With a p-value = 1.282e-08, there is strong evidence to conclude that the true dispersion parameter is significantly greater than 1. There is even stronger evidence of overdispersion in this model compared to the previous model.
+
 ```{r}
 dispersiontest(model_b, alternative = "greater")
 ```
 
-```{r}
-## get interpretation for this - should provide evidence of model fitting or not
-pchisq(model_b$deviance, df = model_a$df.residual, lower.tail = FALSE)
-```
-
-We again have further evidence of the model not fitting well from looking at a plot of the residual values against treatment group. The range of residual values here is larger; however, the residual deviance for this model is 10200 indicating a slightly better fit that the previous, simpler model where the residual deviance was 12925.
-```{r}
-plot(couples*2+(women_alone), resid(model_b), xlab = "Treatment Group", ylab = "Residual", main = "Plot of Residuals by Treatment Group")
-abline(h=0)
-```
-
+### Part C
 (c)  Fit an overdispersed Poisson model. What do you conclude regarding effectiveness of the intervention?
 ```{r}
 model_a2 <- glm(fupacts ~ couples + women_alone, family = quasipoisson, data = risky)
@@ -99,10 +131,9 @@ pchisq(model_b2$deviance, df = model_a$df.residual, lower.tail = FALSE)
 
 ```
 
-(d)  These data include responses from both men and women from the partici-pating couples. Does this give you any concern with regard to our modelingassumptions?
-```{r}
-# Yes - they are not independent. 
-```
+### Part D
+
+These data include responses from both men and women from the participating couples, therefore we expect a high - or even perfect - correlation among the number of sex acts at both baseline and follow up between observations from subjects in the same partnership. The assumption of a generalized linear model that outcomes are independent is violated here.
 
 ## Question 2
 
@@ -110,31 +141,28 @@ pchisq(model_b2$deviance, df = model_a$df.residual, lower.tail = FALSE)
 Write an iteratively reweighted least squares algorithm (see slides 8 and 9 of the generalized linear models lecture) to fit Poisson regression. You will need to use your answer to problem 2 to determine what a, b and θ  are. Use the canonical link function for the Poisson which is  g ( μ ) = log a ( μ ) .) θ = h ( μ ) . Test it out on problem 1. How close do you get to the right answer?
 
 ```{r}
-irls <- function(model, data_vector, beta = 1) {
-  beta_val <- model$coefficients[beta + 1]
-  n <- data_vector*beta_val
-  mu <- e^(n)
-
-  
-  
-}
-
-
-irls =
-function(A, b, family=binomial, maxit=25, tol=1e-08)
-{
-  x = rep(0,ncol(A))
-  for(j in 1:maxit)
-  {
-    eta    = A %*% x
-    g      = family()$linkinv(eta)
-    gprime = family()$mu.eta(eta)
-    z      = eta + (b - g) / gprime
-    W      = as.vector(gprime^2 / family()$variance(g))
-    xold   = x
-    x      = solve(crossprod(A,W*A), crossprod(A,W*z), tol=2*.Machine$double.eps)
-    if(sqrt(crossprod(x-xold)) < tol) break
+# c is the covariate matrix --> c = risky without treatment and outcome vals
+# y is the outcome vector
+# b is the beta matrix
+xa_test <- data.matrix(risky[,c(2,3)])
+ya_test <- risky[,6]
+poisson_irls <- function(c, y, convergence = -1e-10, maxit = 2) {
+  #diff = 100
+  b <- rep(1, ncol(c))
+  for(i in 1:maxit) {
+  eta = c %*% b
+  mu = exp(eta)
+  #redundant, these values are the same as eta and v
+  theta = log(mu) #theta = eta
+  v = exp(theta) # v = mu
+  z = eta + ((y - mu)/mu)
+  w = 1 / (v * ((1/mu)^2))
+  model <- lm(z~c, weights = w)
+  print(summary(model))
+ # diff = abs(sum(model$coefficients[-1] - b))
+  b <- model$coefficients[-1]
+  #data = rbind(data, b)
   }
-  list(coefficients=x,iterations=j)
+  b
 }
 ```
