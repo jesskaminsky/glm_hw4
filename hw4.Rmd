@@ -23,7 +23,7 @@ output: html_document
 library(AER)
 library(ggplot2)
 
-risky <- read.csv("risky_behaviors.csv")
+risky <- read.table("risky_behaviors.csv")
 attach(risky)
 
 #remove first column of data that is an unnecessary indexing variable
@@ -40,7 +40,7 @@ In exploring the risky behavior dataset, we hope to find a model that best predi
 ```{r}
 #convert 2 treatment dummy vars to 1 treatment variable that also accounts for contol group - this variable is the number of partners that received counseling
 risky$treatment = couples*2+(women_alone)
-
+attach(risky)
 par(mfrow=(c(2,2)))
 boxplot(bupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Baseline Sex Actsby Treatment Group", ylab = "Number of Unprotected Sex Acts")
 boxplot(fupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Follow-Up Sex Acts by Treatment Group", ylab = "Number of Unprotected Sex Acts", ylim = c(0, 300))
@@ -158,6 +158,9 @@ poisson_irls <- function(c, y, convergence = -1e-10, maxit = 2) {
   z = eta + ((y - mu)/mu)
   w = 1 / (v * ((1/mu)^2))
   model <- lm(z~c, weights = w)
+  #  Error in model.frame.default(formula = z ~ c, weights = w, drop.unused.levels = TRUE) : 
+  # invalid type (list) for variable 'z' 
+  ### maybe try matrx multiplication instead
   print(summary(model))
  # diff = abs(sum(model$coefficients[-1] - b))
   b <- model$coefficients[-1]
