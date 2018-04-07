@@ -23,9 +23,8 @@ output: html_document
 library(AER)
 library(ggplot2)
 
-risky <- read.table("risky_behaviors.csv")
-attach(risky)
-
+risky <- read.csv("risky_behaviors.csv")
+risky$treatment = (as.numeric(couples)*2+(as.numeric(women_alone))) - 3
 #remove first column of data that is an unnecessary indexing variable
 risky <- risky[-1]
 #round the outcome variable to be a discrete count variable so we can use poisson regression
@@ -33,16 +32,16 @@ risky$fupacts <- round(risky$fupacts)
 #convert the treatment groups to factor/dummy type variables rather than numeric
 risky$couples <- factor(risky$couples)
 risky$women_alone <- factor(risky$women_alone)
+
+attach(risky)
 ```
 
 In exploring the risky behavior dataset, we hope to find a model that best predicts the rates of unprotected sex acts among couples and the efficiacy of an intervention the provided counseling sessions regarding practices that could reduce their likelihood of contracting HIV. When initially exploring the variables of interest - number of unprotected sex acts - by treatment group, we see that there are some potential outliers in the women alone and control groups - especially for baseline sex acts; however if these larger data points were excluded, the distribution of sex acts at baseline seem approximately equal among treatment groups. We can see a decrease in mean of the outcome at follow up among all treatment groups, but most notably in the women alone and couples groups - even the potential outliers decreased markedly. From exploring the following boxplots, there is evidence that the intervention was succesful at reducing the rate of unprotected sex acts. We will further explore this relationship using poisson regression.
 
 ```{r}
 #convert 2 treatment dummy vars to 1 treatment variable that also accounts for contol group - this variable is the number of partners that received counseling
-risky$treatment = couples*2+(women_alone)
-attach(risky)
 par(mfrow=(c(2,2)))
-boxplot(bupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Baseline Sex Actsby Treatment Group", ylab = "Number of Unprotected Sex Acts")
+boxplot(bupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Baseline Sex Acts by Treatment Group", ylab = "Number of Unprotected Sex Acts", data = risky)
 boxplot(fupacts~treatment, names = c("Control", "Women Alone", "Couples"), main = "Follow-Up Sex Acts by Treatment Group", ylab = "Number of Unprotected Sex Acts", ylim = c(0, 300))
 ```
 
@@ -65,7 +64,7 @@ Based on this model, we can interpret that the estimated rate of unprotected sex
 
 In order to assess the fit of this model, we will perform a chi-squared test, testing the null hypothesis test that the ratio betweel the model residual deviance and residual degrees of freedm is equal to 1, we obtain a p-value that is approximately 0. Therefore, we can conclude that the ratio is significantly different than 1 which provides us with evidence that the model does not fit well and there is evidence of dispersion.
 
-```{r}
+```{r, include = FALSE}
 pchisq(model_a$deviance, df = model_a$df.residual, lower.tail = FALSE)
 ```
 
@@ -83,8 +82,8 @@ With a p-value = 9.961e-07, there is strong evidence to conclude that the true d
 
 We will now extend the above model and include the other predictors included in the dataset - sex, baseline HIV status, and baseline number of unprotected sex acts. Poisson regression generated the following model.
 
-$log(Unprotected Sex Acts_{follow-up}) = 2.787 + 0.109(sex = woman) - 0.450(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts) $
-$Unprotected Sex Acts_{follow-up} = e ^ {2.787 + 0.109(sex = woman) - 0.450(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts)}$
+$log(Unprotected Sex Acts_{follow-up}) = 2.787 + 0.109(sex = woman) - 0.410(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts) $
+$Unprotected Sex Acts_{follow-up} = e ^ {2.787 + 0.109(sex = woman) - 0.410(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts)}$
 
 A summary of the model is presented below.
 ```{r}
@@ -93,7 +92,7 @@ summary(model_b)
 ```
 
 From the model, we can interpret that the estimated rate of unprotected sex acts per three months for HIV negative males in the control group having 0 unprotected sex acts at baseline is 2.787. As another example, the estimated rate of the outcome per three months for a HIV negative female in the couples group with 10 unprotected sex acts would be calculated as follows:
-$e ^ {2.787 + 0.109(1) - 0.450(1) - 0.662(0) - 0.438(0) + 0.011(10)} = 12.88418$ unprotected sex acts at followup per three months
+$e ^ {2.787 + 0.109(1) - 0.410(1) - 0.662(0) - 0.438(0) + 0.011(10)} = 13.410$ unprotected sex acts at followup per three months
 
 We can interpret the coefficients of the model as follows:
 - The predicted rate of unprotected sex acts at follow-up per three months for women is ($e^{0.109}=1.115$) = 11.5% greater than the rate for men when holding all other predictors constant.
@@ -118,22 +117,28 @@ dispersiontest(model_b, alternative = "greater")
 ```
 
 ### Part C
-(c)  Fit an overdispersed Poisson model. What do you conclude regarding effectiveness of the intervention?
+
+We will now fit an overdispersed Poisson model using the quasipoisson because the 2 preceeding models showed significant evidence of overdispersion. The second model - using all variables as predictors - had a better fit than the simpler model, therefore we will use all predictors. Using the quasipoisson family, the following model was generated:
+
+$log(Unprotected Sex Acts_{follow-up}) = 2.787 + 0.109(sex = woman) - 0.410(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts) $
+$Unprotected Sex Acts_{follow-up} = e ^ {2.787 + 0.109(sex = woman) - 0.410(Couples = 1) - 0.662(Women Alone = 1) - 0.438(Baseline HIV = +) + 0.011(Baseline Sex Acts)}$
+
+When fitting a quasi-poisson model, the coefficients do not change, however the standard errors and therefore p-values for each term do change. In this previous model, all coefficients were sigificant predictors of the outcome. In this model, the indicator variable for women is not significant in predicting the rate of unprotected sex acts over a three month period. All other variables in the model are still significant after adjusting for overdispersion. A summary of the model is presented below.
 ```{r}
-model_a2 <- glm(fupacts ~ couples + women_alone, family = quasipoisson, data = risky)
-model_b2 <- glm(fupacts ~ ., family = quasipoisson, data = risky)
-summary(model_a2)
+model_b2 <- glm(fupacts ~ ., family = quasipoisson, data = risky[-7])
 summary(model_b2)
-
-
-pchisq(model_a2$deviance, df = model_a$df.residual, lower.tail = FALSE)
-pchisq(model_b2$deviance, df = model_a$df.residual, lower.tail = FALSE)
-
 ```
+
+The p-value from a chi-squared test, testing the null hypothesis test that the ratio betweel the model residual deviance and residual degrees of freedm is equal to 1, is still 0. There are likely other unmeasured variables that would be useful in this model that would explain the variation in predicted and observed values.
+```{r, include = FALSE}
+pchisq(model_b2$deviance, df = model_a$df.residual, lower.tail = FALSE)
+```
+
+Based on the model and a general comparison the baseline and follow-up data, I believe that the treatment is effective in decreasing the overall rate of unprotected sex acts. Being in the couples or women_alone treatment group significantly decreases the rate of unprotected sex acts. Being in the couples treatment group decreases the rate of the outcome more than being in the women_alone group. This is even stronger evidence for the efficacy of the treatment - when both members of a partnership receive the treatment they are less likely to engage in unprotected sex than those in couples where only the woman receives the intervention.
 
 ### Part D
 
-These data include responses from both men and women from the participating couples, therefore we expect a high - or even perfect - correlation among the number of sex acts at both baseline and follow up between observations from subjects in the same partnership. The assumption of a generalized linear model that outcomes are independent is violated here.
+These data include responses from both men and women from the participating couples, therefore we expect a high - or even perfect - correlation among the number of sex acts at both baseline and follow up between observations from subjects in the same partnership. The assumption that outcomes are independent is violated here.
 
 ## Question 2
 
@@ -146,26 +151,50 @@ Write an iteratively reweighted least squares algorithm (see slides 8 and 9 of t
 # b is the beta matrix
 xa_test <- data.matrix(risky[,c(2,3)])
 ya_test <- risky[,6]
-poisson_irls <- function(c, y, convergence = -1e-10, maxit = 2) {
-  #diff = 100
+
+poisson_irls <- function(c, y, convergence = 1e-2) {
+  diff = 100
   b <- rep(1, ncol(c))
-  for(i in 1:maxit) {
-  eta = c %*% b
-  mu = exp(eta)
-  #redundant, these values are the same as eta and v
-  theta = log(mu) #theta = eta
-  v = exp(theta) # v = mu
-  z = eta + ((y - mu)/mu)
-  w = 1 / (v * ((1/mu)^2))
-  model <- lm(z~c, weights = w)
-  #  Error in model.frame.default(formula = z ~ c, weights = w, drop.unused.levels = TRUE) : 
-  # invalid type (list) for variable 'z' 
-  ### maybe try matrx multiplication instead
-  print(summary(model))
- # diff = abs(sum(model$coefficients[-1] - b))
-  b <- model$coefficients[-1]
-  #data = rbind(data, b)
-  }
+  
+  while(diff > convergence) {
+    eta = c %*% b
+    mu = exp(eta)
+    
+    
+    #redundant, these values are the same as eta and v
+    theta = log(mu) #theta = eta
+    v = exp(theta) # v = mu
+    z = eta + (y - mu) * (1/(mu*(1-mu)))
+    w = ginv(v * ((1/mu)^2))
+    
+    b_new = ginv(t(c) %*% diag(as.vector(w)) %*% c) %*% (t(c) %*% diag(as.vector(w)) %*% z)
+    diff = sum(b_new - b)
+    b = b_new
+   }
+  
   b
 }
 ```
+
+```{r}
+
+poisson_irls2 <- function(c, y, convergence = 1e-2) {
+  diff = 100
+  b <- rep(1, ncol(c))
+  
+  while(diff > convergence) {
+    eta = c %*% b
+    mu = exp(eta)
+    
+    z = eta + (y-mu)*log(eta)
+    w = eta*mu*(1-mu)
+    b_new = ginv(t(c) %*% diag(as.vector(w)) %*% c) %*% (t(c) %*% diag(as.vector(w)) %*% z)
+    diff = sum(b_new - b)
+    b = b_new
+   }
+  
+  b
+}
+
+```
+
